@@ -36,6 +36,12 @@
 
 #include <SDL2/SDL.h>
 
+#define WIDTH_CHESS 600
+#define HEIGHT_CHESS 360
+
+SDL_Window *window;
+SDL_Surface *screenSurface;
+
 void BlockTest()
 {
   using namespace Imager;
@@ -62,7 +68,7 @@ void BlockTest()
 
   // Generate a PNG file that displays the scene...
   const char *filename = "block.png";
-  scene.SaveImage(filename, 320, 400, 4.5, 4);
+  scene.SaveImage(filename, 320, 400, 4.5, 4, window, screenSurface);
   std::cout << "Wrote " << filename << std::endl;
 }
 
@@ -84,7 +90,7 @@ void SphereTest()
 
   // Generate a PNG file that displays the scene...
   const char *filename = "sphere.png";
-  scene.SaveImage(filename, 400, 400, 3.0, 1);
+  scene.SaveImage(filename, 400, 400, 3.0, 1, window, screenSurface);
   std::cout << "Wrote " << filename << std::endl;
 }
 
@@ -134,7 +140,7 @@ void TorusTest(const char* filename, double glossFactor)
       );
 
   // Generate a PNG file that displays the scene...
-  scene.SaveImage(filename, 420, 300, 5.5, 2);
+  scene.SaveImage(filename, 420, 300, 5.5, 2, window, screenSurface);
   std::cout << "Wrote " << filename << std::endl;
 }
 
@@ -163,7 +169,7 @@ void BitDonutTest()
 
   // Generate a PNG file that displays the scene...
   const char *filename = "donutbite.png";
-  scene.SaveImage(filename, 300, 300, 6.0, 2);
+  scene.SaveImage(filename, 300, 300, 6.0, 2, window, screenSurface);
   std::cout << "Wrote " << filename << std::endl;
 }
 
@@ -205,7 +211,7 @@ void SetIntersectionTest()
   scene.AddLightSource(LightSource(Vector(-5.0, 10.0, +80.0), Color(1.0, 1.0, 1.0)));
 
   const char *filename = "intersection.png";
-  scene.SaveImage(filename, 300, 300, 25.0, 2);
+  scene.SaveImage(filename, 300, 300, 25.0, 2, window, screenSurface);
   std::cout << "Wrote " << filename << std::endl;
 }
 
@@ -233,7 +239,7 @@ void SetDifferenceTest()
   scene.AddLightSource(LightSource(Vector(-5.0, 50.0, +20.0), Color(1.0, 1.0, 1.0)));
 
   const char *filename = "difference.png";
-  scene.SaveImage(filename, 300, 300, 20.0, 2);
+  scene.SaveImage(filename, 300, 300, 20.0, 2, window, screenSurface);
   std::cout << "Wrote " << filename << std::endl;
 }
 
@@ -254,7 +260,7 @@ void CuboidTest()
   scene.AddLightSource(LightSource(Vector(-5.0, 50.0, +20.0), Color(1.0, 1.0, 1.0)));
 
   const char *filename = "cuboid.png";
-  scene.SaveImage(filename, 300, 300, 3.0, 2);
+  scene.SaveImage(filename, 300, 300, 3.0, 2, window, screenSurface);
   std::cout << "Wrote " << filename << std::endl;
 }
 
@@ -275,7 +281,7 @@ void SpheroidTest()
   scene.AddLightSource(LightSource(Vector(-47.0, -37.0, +12.0), Color(1.0, 0.2, 0.2)));
 
   const char *filename = "spheroid.png";
-  scene.SaveImage(filename, 300, 300, 8.0, 2);
+  scene.SaveImage(filename, 300, 300, 8.0, 2, window, screenSurface);
   std::cout << "Wrote " << filename << std::endl;
 }
 
@@ -296,7 +302,7 @@ void CylinderTest()
   scene.AddLightSource(LightSource(Vector(+35.0, +50.0, +20.0), Color(1.0, 1.0, 1.0)));
 
   const char *filename = "cylinder.png";
-  scene.SaveImage(filename, 300, 300, 6.0, 2);
+  scene.SaveImage(filename, 300, 300, 6.0, 2, window, screenSurface);
   std::cout << "Wrote " << filename << std::endl;
 }
 
@@ -314,7 +320,7 @@ void SaturnTest()
   scene.AddLightSource(LightSource(Vector(+30.0, +26.0, +20.0), Color(1.0, 1.0, 1.0)));
 
   const char *filename = "saturn.png";
-  scene.SaveImage(filename, 500, 250, 4.0, 4);
+  scene.SaveImage(filename, 500, 250, 4.0, 4, window, screenSurface);
   std::cout << "Wrote " << filename << std::endl;
 }
 
@@ -342,7 +348,7 @@ void PolyhedraTest()
   scene.AddLightSource(LightSource(Vector(+45.0, -10.0, +40.0), Color(0.1, 0.5, 0.1, 0.5)));
 
   const char *filename = "polyhedra.png";
-  scene.SaveImage(filename, 600, 300, 12.0, 4);
+  scene.SaveImage(filename, 600, 300, 12.0, 4, window, screenSurface);
   std::cout << "Wrote " << filename << std::endl;
 }
 
@@ -375,7 +381,7 @@ void DodecahedronOverlapTest()
   scene.AddLightSource(LightSource(Vector(+45.0, -10.0, +40.0), Color(0.1, 0.5, 0.1, 0.5)));
 
   const char *filename = "overlap.png";
-  scene.SaveImage(filename, 400, 300, 12.0, 1);
+  scene.SaveImage(filename, 400, 300, 12.0, 1, window, screenSurface);
   std::cout << "Wrote " << filename << std::endl;
 }
 
@@ -467,7 +473,7 @@ void KaleidoscopeTest()
   scene.AddDebugPoint(421, 300);
 
   const char *filename = "kaleid.png";
-  scene.SaveImage(filename, 600, 600, 6.0, 1);
+  scene.SaveImage(filename, 600, 600, 6.0, 1, window, screenSurface);
   std::cout << "Wrote " << filename << std::endl;
 }
 
@@ -498,7 +504,7 @@ void MultipleSphereTest()
   scene.AddLightSource(LightSource(Vector(+45.0, -10.0, +40.0), Color(0.1, 0.2, 0.1, 0.5)));
 
   const char* filename = "multisphere.png";
-  scene.SaveImage(filename, 400, 300, 10.0, 1);
+  scene.SaveImage(filename, 400, 300, 10.0, 1, window, screenSurface);
   std::cout << "Wrote " << filename << std::endl;
 }
 
@@ -568,7 +574,7 @@ void ChessBoardTest()
   scene.AddLightSource(LightSource(Vector(-25.0, +30.0, +40.0), Color(0.3, 0.2, 0.1, 1.0)));
 
   const char* filename = "chessboard.png";
-  scene.SaveImage(filename, 600, 360, 4.5, 3);
+  scene.SaveImage(filename, 600, 360, 4.5, 3, window, screenSurface);
 
   std::cout << "Wrote " << filename << std::endl;
 }
@@ -665,6 +671,31 @@ int main(int argc, const char *argv[])
 {
   using namespace std;
 
+  /*============< SDL setup >============*/
+  // Window to render to
+  window = NULL;
+  screenSurface = NULL;
+
+  if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+    printf("SDL error on initialization: %s\n", SDL_GetError());
+    exit(1);
+  }
+
+  // Create window
+  window = SDL_CreateWindow("Raytracer",
+      SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+      WIDTH_CHESS, HEIGHT_CHESS,
+      SDL_WINDOW_SHOWN);
+  if (window == NULL) {
+    printf("SDL error on window creation: %s\n", SDL_GetError());
+    exit(1);
+  }
+  screenSurface = SDL_GetWindowSurface(window);
+
+  // Write to the surface
+  //SDL_UpdateWindowSurface(window);
+  //SDL_Delay(2000);
+  /*============< SDL setup >============*/
 
   int rc = 1;
 

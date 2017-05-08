@@ -29,6 +29,7 @@
 #include <vector>
 #include <cmath>
 #include "algebra.h"
+#include <SDL2/SDL.h>
 
 #define RAYTRACE_DEBUG_POINTS 0
 
@@ -1494,7 +1495,9 @@ namespace Imager
             size_t pixelsWide, 
             size_t pixelsHigh, 
             double zoom, 
-            size_t antiAliasFactor) const;
+            size_t antiAliasFactor,
+            SDL_Window *window,
+            SDL_Surface *screenSurface) const;
 
         // By default, regions of space that are not
         // explicitly occupied by some object have

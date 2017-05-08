@@ -743,7 +743,9 @@ namespace Imager
       size_t pixelsWide, 
       size_t pixelsHigh, 
       double zoom, 
-      size_t antiAliasFactor) const
+      size_t antiAliasFactor,
+      SDL_Window *window,
+      SDL_Surface *screenSurface) const
   {
 
     timestamp_t t0 = get_timestamp();
@@ -909,7 +911,18 @@ namespace Imager
       message += lodepng_error_text(error);
       throw ImagerException(message.c_str());
     }
+
+    /*** SDL ***/
+    SDL_Surface *rgbSurface = SDL_CreateRGBSurfaceFrom(
+        &rgbaBuffer[0], pixelsWide, pixelsHigh, 32, // depth = 8 bits
+        pixelsWide*4*sizeof(unsigned char),
+        0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000); // Defaults for RGBA masks
+    SDL_BlitSurface(rgbSurface, NULL, screenSurface, NULL);
+    SDL_UpdateWindowSurface(window);
+    SDL_Delay(10000);
   }
+
+  /*==============< END OF SAVEIMAGE >=================*/
 
   // The following function searches through all solid objects
   // for the first solid (if any) that contains the given point.
