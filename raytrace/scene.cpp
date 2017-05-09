@@ -766,17 +766,34 @@ namespace Imager
 
     const Color fullIntensity(1.0, 1.0, 1.0);
 
+
+
+    // Downsample the image buffer to an integer array of RGBA 
+    // values that LodePNG understands.
+    const unsigned char OPAQUE_ALPHA_VALUE = 255;
+    const unsigned BYTES_PER_PIXEL = 4;
+
+    // The number of bytes in buffer to be passed to LodePNG.
+    const unsigned RGBA_BUFFER_SIZE = 
+      pixelsWide * pixelsHigh * BYTES_PER_PIXEL;
+
+    std::vector<unsigned char> rgbaBuffer(RGBA_BUFFER_SIZE);
+    unsigned rgbaIndex = 0;
+    const double patchSize = antiAliasFactor * antiAliasFactor;
+
+
+
     // We keep a list of (i,j) screen coordinates for pixels
     // we are not able to trace definitive rays for.
     // Later we will come back and fix these pixels.
     PixelList ambiguousPixelList;
 
-    for (size_t i=0; i < pixelsWide; ++i)
+    for (size_t j=0; j < pixelsHigh; ++j)
     {
-      direction.x = (i - pixelsWide/2.0) / newZoom;
-      for (size_t j=0; j < pixelsHigh; ++j)
+      direction.y = (pixelsHigh/2.0 - j) / newZoom;
+      for (size_t i=0; i < pixelsWide; ++i)
       {
-        direction.y = (pixelsHigh/2.0 - j) / newZoom;
+        direction.x = (i - pixelsWide/2.0) / newZoom;
 
 #if RAYTRACE_DEBUG_POINTS
         {
@@ -813,10 +830,19 @@ namespace Imager
               ambientRefraction,
               fullIntensity,
               0);
+          rgbaBuffer[rgbaIndex++] = ConvertPixelValue(
+              pixel.color.red, 0.000093);
+          rgbaBuffer[rgbaIndex++] = ConvertPixelValue(
+              pixel.color.green, 0.000093);
+          rgbaBuffer[rgbaIndex++] = ConvertPixelValue(
+              pixel.color.blue,  0.000093);
+          rgbaBuffer[rgbaIndex++] = OPAQUE_ALPHA_VALUE;
           //printf("%f, %f, %f\n", pixel.color.red, pixel.color.green, pixel.color.blue);
         }
         catch (AmbiguousIntersectionException)
         {
+          printf("OH GOD, ambiguous pixels were found!!\n");
+          exit(1);
           // Getting here means that somewhere in the recursive 
           // code for tracing rays, there were multiple 
           // intersections that had minimum distance from a 
@@ -851,62 +877,16 @@ namespace Imager
       ResolveAmbiguousPixel(buffer, p.i, p.j);
     }
     */
-
+    /*
     // We want to scale the arbitrary range of
     // color component values to the range 0..255
     // allowed by PNG format.  We therefore find
     // the maximum red, green, or blue value anywhere
     // in the image.
     const double max = buffer.MaxColorValue();
+    printf("max is: %lf\n", max);
+    */
 
-    // Downsample the image buffer to an integer array of RGBA 
-    // values that LodePNG understands.
-    const unsigned char OPAQUE_ALPHA_VALUE = 255;
-    const unsigned BYTES_PER_PIXEL = 4;
-
-    // The number of bytes in buffer to be passed to LodePNG.
-    const unsigned RGBA_BUFFER_SIZE = 
-      pixelsWide * pixelsHigh * BYTES_PER_PIXEL;
-
-    std::vector<unsigned char> rgbaBuffer(RGBA_BUFFER_SIZE);
-    unsigned rgbaIndex = 0;
-    const double patchSize = antiAliasFactor * antiAliasFactor;
-    for (size_t j=0; j < pixelsHigh; ++j)
-    {
-      for (size_t i=0; i < pixelsWide; ++i)
-      {
-        
-        Color sum(0.0, 0.0, 0.0);
-        for (size_t di=0; di < antiAliasFactor; ++di)
-        {
-          for (size_t dj=0; dj < antiAliasFactor; ++dj)
-          {
-            sum += buffer.Pixel(
-                antiAliasFactor*i + di, 
-                antiAliasFactor*j + dj).color;
-          }
-        }
-        sum /= patchSize;
-
-        // Convert to integer red, green, blue, alpha values,
-        // all of which must be in the range 0..255.
-        rgbaBuffer[rgbaIndex++] = ConvertPixelValue(sum.red,   max);
-        rgbaBuffer[rgbaIndex++] = ConvertPixelValue(sum.green, max);
-        rgbaBuffer[rgbaIndex++] = ConvertPixelValue(sum.blue,  max);
-        rgbaBuffer[rgbaIndex++] = OPAQUE_ALPHA_VALUE;
-        
-
-        /*
-        rgbaBuffer[rgbaIndex++] = ConvertPixelValue(
-            buffer.Pixel(i,j).color.red, max);
-        rgbaBuffer[rgbaIndex++] = ConvertPixelValue(
-            buffer.Pixel(i,j).color.green, max);
-        rgbaBuffer[rgbaIndex++] = ConvertPixelValue(
-            buffer.Pixel(i,j).color.blue,  max);
-        rgbaBuffer[rgbaIndex++] = OPAQUE_ALPHA_VALUE;
-        */
-      }
-    }
     // Timing code (jocelynh)
     timestamp_t t1 = get_timestamp();
     std::cout << "time elapsed: " << (float)((t1-t0)/1000000.0L) << "\n";
