@@ -44,7 +44,8 @@ namespace Imager
             // of times we enter and exit this solid.
             const Vector direction(0.0, 0.0, 1.0);
 
-            enclosureList.clear();
+            //enclosureList.clear();
+            IntersectionList enclosureList;
             AppendAllIntersections(point, direction, enclosureList);
 
             int enterCount = 0;     // number of times we enter the solid

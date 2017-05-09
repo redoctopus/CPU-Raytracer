@@ -463,7 +463,8 @@ namespace Imager
             const Vector& direction, 
             Intersection &intersection) const
         {
-            cachedIntersectionList.clear();
+            //cachedIntersectionList.clear();
+            IntersectionList cachedIntersectionList;
             AppendAllIntersections(vantage, direction, cachedIntersectionList);
             return PickClosestIntersection(cachedIntersectionList, intersection);
         }
@@ -616,8 +617,8 @@ namespace Imager
         // the overhead and fragmentation caused by repeated 
         // memory allocations creating and destroying 
         // std::vector contents.
-        mutable IntersectionList cachedIntersectionList;
-        mutable IntersectionList enclosureList;
+        //mutable IntersectionList cachedIntersectionList;
+        //mutable IntersectionList enclosureList;
     };
 
     //------------------------------------------------------------------------
@@ -1632,7 +1633,7 @@ namespace Imager
 
         // Help performance by avoiding constant construction/destruction
         // of intersection lists.
-        mutable IntersectionList cachedIntersectionList;
+        //mutable IntersectionList cachedIntersectionList;
 
         struct DebugPoint
         {

@@ -34,9 +34,10 @@
 #include "imager.h"
 #include "../lodepng/lodepng.h"
 
+#include <pthread.h>
 #include <SDL/SDL.h>
-
 #include <sys/time.h>
+std::vector<unsigned char> rgbaBuffer;
 
 /* The following timestamp code from Stack Overflow */
 /* http://stackoverflow.com/questions/1861294/how-to-calculate-execution-time-of-a-code-snippet-in-c */
@@ -667,7 +668,8 @@ namespace Imager
       Intersection& intersection) const
   {
     // Build a list of all intersections from all objects.
-    cachedIntersectionList.clear();     // empty any previous contents
+    //cachedIntersectionList.clear();     // empty any previous contents
+    IntersectionList cachedIntersectionList;
     SolidObjectList::const_iterator iter = solidObjectList.begin();
     SolidObjectList::const_iterator end  = solidObjectList.end();
     for (; iter != end; ++iter)
@@ -754,15 +756,11 @@ namespace Imager
       ((pixelsWide < pixelsHigh) ? pixelsWide : pixelsHigh);
 
     const double newZoom  = zoom * smallerDim;
-    ImageBuffer buffer(pixelsWide, pixelsHigh, backgroundColor);
+    //ImageBuffer buffer(pixelsWide, pixelsHigh, backgroundColor);
 
     // The camera is located at the origin.
-    Vector camera(0.0, 0.0, 0.0);
+    //Vector camera(0.0, 0.0, 0.0);
 
-    // The camera faces in the -z direction.
-    // This allows the +x direction to be to the right,
-    // and the +y direction to be upward.
-    Vector direction(0.0, 0.0, -1.0);
 
     const Color fullIntensity(1.0, 1.0, 1.0);
 
@@ -777,7 +775,9 @@ namespace Imager
     const unsigned RGBA_BUFFER_SIZE = 
       pixelsWide * pixelsHigh * BYTES_PER_PIXEL;
 
-    std::vector<unsigned char> rgbaBuffer(RGBA_BUFFER_SIZE);
+    // Buffer to which we write pixel values
+    //rgbaBuffer = std::vector<unsigned char>(RGBA_BUFFER_SIZE);
+    unsigned char rgbaBuffer[RGBA_BUFFER_SIZE];
     unsigned rgbaIndex = 0;
     const double patchSize = antiAliasFactor * antiAliasFactor;
 
@@ -788,8 +788,14 @@ namespace Imager
     // Later we will come back and fix these pixels.
     PixelList ambiguousPixelList;
 
+    #pragma omp parallel for
     for (size_t j=0; j < pixelsHigh; ++j)
     {
+      // The camera faces in the -z direction.
+      // This allows the +x direction to be to the right,
+      // and the +y direction to be upward.
+      Vector direction(0.0, 0.0, -1.0);
+      Vector camera(0.0, 0.0, 0.0);
       direction.y = (pixelsHigh/2.0 - j) / newZoom;
       for (size_t i=0; i < pixelsWide; ++i)
       {
@@ -818,47 +824,25 @@ namespace Imager
         }
 #endif
 
-        PixelData& pixel = buffer.Pixel(i,j);
-        try
-        {
-          //printf("tracing (%lu,%lu)\n", i, j);
-          // Trace a ray from the camera toward the given direction
-          // to figure out what color to assign to this pixel.
-          pixel.color = TraceRay(
-              camera,
-              direction,
-              ambientRefraction,
-              fullIntensity,
-              0);
-          rgbaBuffer[rgbaIndex++] = ConvertPixelValue(
-              pixel.color.red, 0.000093);
-          rgbaBuffer[rgbaIndex++] = ConvertPixelValue(
-              pixel.color.green, 0.000093);
-          rgbaBuffer[rgbaIndex++] = ConvertPixelValue(
-              pixel.color.blue,  0.000093);
-          rgbaBuffer[rgbaIndex++] = OPAQUE_ALPHA_VALUE;
-          //printf("%f, %f, %f\n", pixel.color.red, pixel.color.green, pixel.color.blue);
-        }
-        catch (AmbiguousIntersectionException)
-        {
-          printf("OH GOD, ambiguous pixels were found!!\n");
-          exit(1);
-          // Getting here means that somewhere in the recursive 
-          // code for tracing rays, there were multiple 
-          // intersections that had minimum distance from a 
-          // vantage point.  This can be really bad, 
-          // for example causing a ray of light to reflect 
-          // inward into a solid.
+        // Trace a ray from the camera toward the given direction
+        // to figure out what color to assign to this pixel.
+        PixelData pixel;
+        pixel.color = TraceRay(
+            camera,
+            direction,
+            1.0,//ambientRefraction,
+            Color(1.0, 1.0, 1.0),//fullIntensity,
+            0);
 
-          // Mark the pixel as ambiguous, so that any other
-          // ambiguous pixels nearby know not to use it.
-          pixel.isAmbiguous = true;
-
-          // Keep a list of all ambiguous pixel coordinates
-          // so that we can rapidly enumerate through them
-          // in the disambiguation pass.
-          ambiguousPixelList.push_back(PixelCoordinates(i, j));
-        }
+        unsigned index = pixelsWide*j*BYTES_PER_PIXEL + i*BYTES_PER_PIXEL;
+        rgbaBuffer[index++] = ConvertPixelValue(
+            pixel.color.red, 0.000093); // Magic number was the max pixel value ;-;
+        rgbaBuffer[index++] = ConvertPixelValue(
+            pixel.color.green, 0.000093);
+        rgbaBuffer[index++] = ConvertPixelValue(
+            pixel.color.blue,  0.000093);
+        rgbaBuffer[index++] = OPAQUE_ALPHA_VALUE;
+        //printf("%f, %f, %f\n", pixel.color.red, pixel.color.green, pixel.color.blue);
       }
     }
 
