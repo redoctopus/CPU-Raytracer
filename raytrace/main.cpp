@@ -574,7 +574,7 @@ void ChessBoardTest()
   scene.AddLightSource(LightSource(Vector(-25.0, +30.0, +40.0), Color(0.3, 0.2, 0.1, 1.0)));
 
   const char* filename = "chessboard.png";
-  scene.SaveImage(filename, 600, 360, 4.5, 3, window, screenSurface);
+  scene.SaveImage(filename, 600, 360, 4.5, 1, window, screenSurface);
 
   std::cout << "Wrote " << filename << std::endl;
 }

@@ -750,13 +750,11 @@ namespace Imager
 
     timestamp_t t0 = get_timestamp();
     // Oversample the image using the anti-aliasing factor.
-    const size_t largePixelsWide = antiAliasFactor * pixelsWide;
-    const size_t largePixelsHigh = antiAliasFactor * pixelsHigh;
     const size_t smallerDim = 
       ((pixelsWide < pixelsHigh) ? pixelsWide : pixelsHigh);
 
-    const double largeZoom  = antiAliasFactor * zoom * smallerDim;
-    ImageBuffer buffer(largePixelsWide, largePixelsHigh, backgroundColor);
+    const double newZoom  = zoom * smallerDim;
+    ImageBuffer buffer(pixelsWide, pixelsHigh, backgroundColor);
 
     // The camera is located at the origin.
     Vector camera(0.0, 0.0, 0.0);
@@ -773,12 +771,12 @@ namespace Imager
     // Later we will come back and fix these pixels.
     PixelList ambiguousPixelList;
 
-    for (size_t i=0; i < largePixelsWide; ++i)
+    for (size_t i=0; i < pixelsWide; ++i)
     {
-      direction.x = (i - largePixelsWide/2.0) / largeZoom;
-      for (size_t j=0; j < largePixelsHigh; ++j)
+      direction.x = (i - pixelsWide/2.0) / newZoom;
+      for (size_t j=0; j < pixelsHigh; ++j)
       {
-        direction.y = (largePixelsHigh/2.0 - j) / largeZoom;
+        direction.y = (pixelsHigh/2.0 - j) / newZoom;
 
 #if RAYTRACE_DEBUG_POINTS
         {
@@ -806,6 +804,7 @@ namespace Imager
         PixelData& pixel = buffer.Pixel(i,j);
         try
         {
+          //printf("tracing (%lu,%lu)\n", i, j);
           // Trace a ray from the camera toward the given direction
           // to figure out what color to assign to this pixel.
           pixel.color = TraceRay(
@@ -814,6 +813,7 @@ namespace Imager
               ambientRefraction,
               fullIntensity,
               0);
+          //printf("%f, %f, %f\n", pixel.color.red, pixel.color.green, pixel.color.blue);
         }
         catch (AmbiguousIntersectionException)
         {
@@ -841,6 +841,7 @@ namespace Imager
     activeDebugPoint = NULL;
 #endif
 
+    /*
     // Go back and "heal" ambiguous pixels as best we can.
     PixelList::const_iterator iter = ambiguousPixelList.begin();
     PixelList::const_iterator end  = ambiguousPixelList.end();
@@ -849,6 +850,7 @@ namespace Imager
       const PixelCoordinates& p = *iter;
       ResolveAmbiguousPixel(buffer, p.i, p.j);
     }
+    */
 
     // We want to scale the arbitrary range of
     // color component values to the range 0..255
@@ -873,6 +875,7 @@ namespace Imager
     {
       for (size_t i=0; i < pixelsWide; ++i)
       {
+        
         Color sum(0.0, 0.0, 0.0);
         for (size_t di=0; di < antiAliasFactor; ++di)
         {
@@ -891,6 +894,17 @@ namespace Imager
         rgbaBuffer[rgbaIndex++] = ConvertPixelValue(sum.green, max);
         rgbaBuffer[rgbaIndex++] = ConvertPixelValue(sum.blue,  max);
         rgbaBuffer[rgbaIndex++] = OPAQUE_ALPHA_VALUE;
+        
+
+        /*
+        rgbaBuffer[rgbaIndex++] = ConvertPixelValue(
+            buffer.Pixel(i,j).color.red, max);
+        rgbaBuffer[rgbaIndex++] = ConvertPixelValue(
+            buffer.Pixel(i,j).color.green, max);
+        rgbaBuffer[rgbaIndex++] = ConvertPixelValue(
+            buffer.Pixel(i,j).color.blue,  max);
+        rgbaBuffer[rgbaIndex++] = OPAQUE_ALPHA_VALUE;
+        */
       }
     }
     // Timing code (jocelynh)
