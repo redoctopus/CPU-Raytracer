@@ -35,11 +35,15 @@
 #include "../lodepng/lodepng.h"
 
 #include <pthread.h>
+#include "pthread_barrier.h"
 #include <SDL/SDL.h>
 #include <sys/time.h>
+#include <immintrin.h>
 
 #define NUM_THREADS 4
-std::vector<unsigned char> rgbaBuffer;
+#define OFFSET_TIMES 5
+//std::vector<unsigned char> rgbaBuffer;
+pthread_barrier_t barrier[2];
 
 /* The following timestamp code from Stack Overflow */
 /* http://stackoverflow.com/questions/1861294/how-to-calculate-execution-time-of-a-code-snippet-in-c */
@@ -64,7 +68,7 @@ namespace Imager
     size_t pixelsHigh;
     size_t pixelsWide;
     double newZoom;
-    unsigned char *rgbaBuffer;
+    unsigned char **rgbaBuffer;
     Imager::Scene *scene;
   } threadArgs;
 
@@ -86,47 +90,57 @@ namespace Imager
     const unsigned char OPAQUE_ALPHA_VALUE = 255;
     const unsigned BYTES_PER_PIXEL = 4;
 
+    unsigned char (*rgbaBuffer)[pixelsHigh*pixelsWide*4] =
+      (unsigned char (*)[pixelsHigh*pixelsWide*4])(args->rgbaBuffer);
+
     // Find indexing for this thread
     size_t j_start = idx;
     size_t j_end = pixelsHigh;
 
     Vector direction(0.0, 0.0, -1.0);
     Vector camera(0.0, 0.0, 0.0);
-    //double cam_offset = 0.0;
+    double cam_offset = 0.0;
+    int parity = 0; // Swap buffer at each outer loop
 
-    /*for (size_t offset=0; offset<10; offset++) {
+    for (size_t offset=0; offset<OFFSET_TIMES; offset++) {
       // Zoom the camera slightly closer
-      camera.z += 0.1;*/
-    for (size_t j=j_start; j<j_end; j+=NUM_THREADS)
-    {
-      // The camera faces in the -z direction.
-      // This allows the +x direction to be to the right,
-      // and the +y direction to be upward.
-      direction.y = (pixelsHigh/2.0 - j) / newZoom;
-      for (size_t i=0; i < pixelsWide; ++i)
+      camera.z += 2;
+
+      for (size_t j=j_start; j<j_end; j+=NUM_THREADS)
       {
-        direction.x = (i - pixelsWide/2.0) / newZoom;
+        // The camera faces in the -z direction.
+        // This allows the +x direction to be to the right,
+        // and the +y direction to be upward.
+        direction.y = (pixelsHigh/2.0 - j) / newZoom;
+        for (size_t i=0; i < pixelsWide; ++i)
+        {
+          direction.x = (i - pixelsWide/2.0) / newZoom;
 
-        // Trace a ray from the camera toward the given direction
-        // to figure out what color to assign to this pixel.
-        PixelData pixel;
-        pixel.color = TraceRay(
-            camera,
-            direction,
-            1.0,//ambientRefraction,
-            Color(1.0, 1.0, 1.0),//fullIntensity,
-            0);
+          // Trace a ray from the camera toward the given direction
+          // to figure out what color to assign to this pixel.
+          PixelData pixel;
+          pixel.color = TraceRay(
+              camera,
+              direction,
+              1.0,//ambientRefraction,
+              Color(1.0, 1.0, 1.0),//fullIntensity,
+              0);
 
-        unsigned index = pixelsWide*j*BYTES_PER_PIXEL + i*BYTES_PER_PIXEL;
-        args->rgbaBuffer[index++] = ConvertPixelValue(
-            pixel.color.red, 0.000093); // Magic number was the max pixel value ;-;
-        args->rgbaBuffer[index++] = ConvertPixelValue(
-            pixel.color.green, 0.000093);
-        args->rgbaBuffer[index++] = ConvertPixelValue(
-            pixel.color.blue,  0.000093);
-        args->rgbaBuffer[index++] = OPAQUE_ALPHA_VALUE;
-        //printf("%f, %f, %f\n", pixel.color.red, pixel.color.green, pixel.color.blue);
+          unsigned index = pixelsWide*j*BYTES_PER_PIXEL + i*BYTES_PER_PIXEL;
+          rgbaBuffer[parity][index++] = ConvertPixelValue(
+              pixel.color.red, 0.000093); // Magic number was the max pixel value ;-;
+          rgbaBuffer[parity][index++] = ConvertPixelValue(
+              pixel.color.green, 0.000093);
+          rgbaBuffer[parity][index++] = ConvertPixelValue(
+              pixel.color.blue,  0.000093);
+          rgbaBuffer[parity][index++] = OPAQUE_ALPHA_VALUE;
+          //printf("%f, %f, %f\n", pixel.color.red, pixel.color.green, pixel.color.blue);
+        }
       }
+      printf("Thread %lu at barrier for number %d\n", idx, offset);
+      pthread_barrier_wait(&barrier[parity]);
+      printf("Thread %lu continuing...\n", idx);
+      parity = !parity;
     }
 
 
@@ -858,7 +872,7 @@ namespace Imager
 
     // Buffer to which we write pixel values
     //rgbaBuffer = std::vector<unsigned char>(RGBA_BUFFER_SIZE);
-    unsigned char rgbaBuffer[RGBA_BUFFER_SIZE];
+    unsigned char rgbaBuffer[2][RGBA_BUFFER_SIZE];
     unsigned rgbaIndex = 0;
     //const double patchSize = antiAliasFactor * antiAliasFactor;
 
@@ -868,6 +882,19 @@ namespace Imager
     // Later we will come back and fix these pixels.
     PixelList ambiguousPixelList;
 
+    // For the outer loop (toggles which barrier/buffer to use)
+    int parity = 0;
+
+    // Initialize barrier
+    if(pthread_barrier_init(&barrier[parity], NULL, NUM_THREADS+1)) {
+      printf("pthread barrier initialization error\n");
+      exit(1);
+    }
+    if(pthread_barrier_init(&barrier[!parity], NULL, NUM_THREADS+1)) {
+      printf("pthread barrier initialization error\n");
+      exit(1);
+    }
+
     // Multithreading
     pthread_t threads[NUM_THREADS];
     for (int i=0; i<NUM_THREADS; i++) {
@@ -876,56 +903,71 @@ namespace Imager
       args->pixelsHigh = pixelsHigh;
       args->pixelsWide = pixelsWide;
       args->newZoom = newZoom;
-      args->rgbaBuffer = &rgbaBuffer[0];
+      args->rgbaBuffer = (unsigned char **)(&rgbaBuffer[0]);
       args->scene = const_cast<Imager::Scene*>(this);
 
       // Create thread to trace ray and stick result in rbgaBuffer
       pthread_create(&threads[i], NULL, &threadHelper, (void*)args);
     }
-    // Wait for all threads to finish
-    for (int i=0; i<NUM_THREADS; i++) {
-      pthread_join(threads[i], NULL);
-    }
+
+
+    
+    /*** Loop a few times ***/
+    for (int offset=0; offset<OFFSET_TIMES; offset++) {
+      // Wait for all threads to finish
+      printf("Main at barrier for number %d\n", offset);
+      pthread_barrier_wait(&barrier[parity]);
+      printf("Main continuing...\n");
 
 #if RAYTRACE_DEBUG_POINTS
-    // Leave no chance of a dangling pointer into debug points.
-    activeDebugPoint = NULL;
+      // Leave no chance of a dangling pointer into debug points.
+      activeDebugPoint = NULL;
 #endif
 
-    // Timing code (jocelynh)
-    timestamp_t t1 = get_timestamp();
-    std::cout << "time elapsed for raytrace: " << (float)((t1-t0)/1000000.0L) << "\n";
+      // Timing code (jocelynh)
+      timestamp_t t1 = get_timestamp();
+      std::cout << "time elapsed for raytrace: " << (float)((t1-t0)/1000000.0L) << "\n";
 
-    /*
-    // Write the PNG file
-    const unsigned error = lodepng::encode(
-        outPngFileName, 
-        rgbaBuffer, 
-        pixelsWide, 
-        pixelsHigh);
+      /*
+      // Write the PNG file
+      const unsigned error = lodepng::encode(
+      outPngFileName, 
+      rgbaBuffer, 
+      pixelsWide, 
+      pixelsHigh);
 
-    // If there was an encoding error, throw an exception.
-    if (error != 0)
-    {
+      // If there was an encoding error, throw an exception.
+      if (error != 0)
+      {
       std::string message = "PNG encoder error: ";
       message += lodepng_error_text(error);
       throw ImagerException(message.c_str());
-    }
-    */
+      }
+      */
 
-    /*** SDL ***/
-    timestamp_t copy_t0 = get_timestamp();
-    SDL_Surface *rgbSurface = SDL_CreateRGBSurfaceFrom(
-        &rgbaBuffer[0], pixelsWide, pixelsHigh, 32, // depth = 8 bits
-        pixelsWide*4*sizeof(unsigned char),
-        0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000); // Defaults for RGBA masks
-    SDL_BlitSurface(rgbSurface, NULL, screenSurface, NULL);
-    // Timing
-    timestamp_t copy_t1 = get_timestamp();
-    //std::cout << "time elapsed for draw: " << (float)((copy_t1-copy_t0)/1000000.0L) << "\n";
-    // Update window shown
-    SDL_UpdateWindowSurface(window);
-    SDL_Delay(500);
+      /*** SDL ***/
+      timestamp_t copy_t0 = get_timestamp();
+      SDL_Surface *rgbSurface = SDL_CreateRGBSurfaceFrom(
+          &rgbaBuffer[parity][0], pixelsWide, pixelsHigh, 32, // depth = 8 bits
+          pixelsWide*4*sizeof(unsigned char),
+          0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000); // Defaults for RGBA masks
+      SDL_BlitSurface(rgbSurface, NULL, screenSurface, NULL);
+      // Timing
+      timestamp_t copy_t1 = get_timestamp();
+      //std::cout << "time elapsed for draw: " << (float)((copy_t1-copy_t0)/1000000.0L) << "\n";
+      // Update window shown
+      SDL_UpdateWindowSurface(window);
+      SDL_Delay(500);
+
+      pthread_barrier_destroy(&barrier[parity]);
+      if(pthread_barrier_init(&barrier[parity], NULL, NUM_THREADS+1)) {
+        printf("pthread barrier initialization error\n");
+        exit(1);
+      }
+
+      // Swap out
+      parity = !parity;
+    }
   }
 
   /*==============< END OF SAVEIMAGE >=================*/
