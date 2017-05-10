@@ -72,6 +72,7 @@ namespace Imager
   static void *threadHelper(void *arg) {
     Imager::Scene *scene = ((threadArgs*)arg)->scene;
     scene->ThreadRayTrace(arg);
+    return NULL;
   }
 
   /* Threading code for raytracing */
@@ -86,16 +87,21 @@ namespace Imager
     const unsigned BYTES_PER_PIXEL = 4;
 
     // Find indexing for this thread
-    size_t j_start = 0;
+    size_t j_start = idx;
     size_t j_end = pixelsHigh;
 
-    for (size_t j=j_start; j<j_end; ++j)
+    Vector direction(0.0, 0.0, -1.0);
+    Vector camera(0.0, 0.0, 0.0);
+    //double cam_offset = 0.0;
+
+    /*for (size_t offset=0; offset<10; offset++) {
+      // Zoom the camera slightly closer
+      camera.z += 0.1;*/
+    for (size_t j=j_start; j<j_end; j+=NUM_THREADS)
     {
       // The camera faces in the -z direction.
       // This allows the +x direction to be to the right,
       // and the +y direction to be upward.
-      Vector direction(0.0, 0.0, -1.0);
-      Vector camera(0.0, 0.0, 0.0);
       direction.y = (pixelsHigh/2.0 - j) / newZoom;
       for (size_t i=0; i < pixelsWide; ++i)
       {
@@ -844,7 +850,6 @@ namespace Imager
 
     // Downsample the image buffer to an integer array of RGBA 
     // values that LodePNG understands.
-    const unsigned char OPAQUE_ALPHA_VALUE = 255;
     const unsigned BYTES_PER_PIXEL = 4;
 
     // The number of bytes in buffer to be passed to LodePNG.
@@ -863,18 +868,24 @@ namespace Imager
     // Later we will come back and fix these pixels.
     PixelList ambiguousPixelList;
 
-    //#pragma omp parallel for num_threads(16) schedule(dynamic)
-    pthread_t threads[2];
-    threadArgs *args = (threadArgs*)malloc(sizeof(threadArgs));
-    args->i = 0;
-    args->pixelsHigh = pixelsHigh;
-    args->pixelsWide = pixelsWide;
-    args->newZoom = newZoom;
-    args->rgbaBuffer = &rgbaBuffer[0];
-    args->scene = const_cast<Imager::Scene*>(this);
+    // Multithreading
+    pthread_t threads[NUM_THREADS];
+    for (int i=0; i<NUM_THREADS; i++) {
+      threadArgs *args = (threadArgs*)malloc(sizeof(threadArgs));
+      args->i = i;
+      args->pixelsHigh = pixelsHigh;
+      args->pixelsWide = pixelsWide;
+      args->newZoom = newZoom;
+      args->rgbaBuffer = &rgbaBuffer[0];
+      args->scene = const_cast<Imager::Scene*>(this);
 
-    pthread_create(&threads[0], NULL, &threadHelper, (void*)args);
-    pthread_join(threads[0], NULL);
+      // Create thread to trace ray and stick result in rbgaBuffer
+      pthread_create(&threads[i], NULL, &threadHelper, (void*)args);
+    }
+    // Wait for all threads to finish
+    for (int i=0; i<NUM_THREADS; i++) {
+      pthread_join(threads[i], NULL);
+    }
 
 #if RAYTRACE_DEBUG_POINTS
     // Leave no chance of a dangling pointer into debug points.
@@ -885,6 +896,7 @@ namespace Imager
     timestamp_t t1 = get_timestamp();
     std::cout << "time elapsed for raytrace: " << (float)((t1-t0)/1000000.0L) << "\n";
 
+    /*
     // Write the PNG file
     const unsigned error = lodepng::encode(
         outPngFileName, 
@@ -899,6 +911,7 @@ namespace Imager
       message += lodepng_error_text(error);
       throw ImagerException(message.c_str());
     }
+    */
 
     /*** SDL ***/
     timestamp_t copy_t0 = get_timestamp();
