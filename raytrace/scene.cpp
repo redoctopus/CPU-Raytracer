@@ -37,6 +37,8 @@
 #include <pthread.h>
 #include <SDL/SDL.h>
 #include <sys/time.h>
+
+#define NUM_THREADS 4
 std::vector<unsigned char> rgbaBuffer;
 
 /* The following timestamp code from Stack Overflow */
@@ -52,8 +54,85 @@ get_timestamp ()
 }
 /* End Stack Overflow code */
 
+
+
 namespace Imager
 {
+  /* Struct for passing into ThreadRayTrace */
+  typedef struct {
+    size_t i;
+    size_t pixelsHigh;
+    size_t pixelsWide;
+    double newZoom;
+    unsigned char *rgbaBuffer;
+    Imager::Scene *scene;
+  } threadArgs;
+
+  // Helper such that pthreads can actually execute ThreadRayTrace
+  static void *threadHelper(void *arg) {
+    Imager::Scene *scene = ((threadArgs*)arg)->scene;
+    scene->ThreadRayTrace(arg);
+  }
+
+  /* Threading code for raytracing */
+  void *Scene::ThreadRayTrace(void *arg) {
+    // Retrieve arguments
+    threadArgs *args = (threadArgs*)arg;
+    size_t idx = args->i;
+    size_t pixelsHigh = args->pixelsHigh;
+    size_t pixelsWide = args->pixelsWide;
+    double newZoom = args->newZoom;
+    const unsigned char OPAQUE_ALPHA_VALUE = 255;
+    const unsigned BYTES_PER_PIXEL = 4;
+
+    // Find indexing for this thread
+    size_t j_start = 0;
+    size_t j_end = pixelsHigh;
+
+    for (size_t j=j_start; j<j_end; ++j)
+    {
+      // The camera faces in the -z direction.
+      // This allows the +x direction to be to the right,
+      // and the +y direction to be upward.
+      Vector direction(0.0, 0.0, -1.0);
+      Vector camera(0.0, 0.0, 0.0);
+      direction.y = (pixelsHigh/2.0 - j) / newZoom;
+      for (size_t i=0; i < pixelsWide; ++i)
+      {
+        direction.x = (i - pixelsWide/2.0) / newZoom;
+
+        // Trace a ray from the camera toward the given direction
+        // to figure out what color to assign to this pixel.
+        PixelData pixel;
+        pixel.color = TraceRay(
+            camera,
+            direction,
+            1.0,//ambientRefraction,
+            Color(1.0, 1.0, 1.0),//fullIntensity,
+            0);
+
+        unsigned index = pixelsWide*j*BYTES_PER_PIXEL + i*BYTES_PER_PIXEL;
+        args->rgbaBuffer[index++] = ConvertPixelValue(
+            pixel.color.red, 0.000093); // Magic number was the max pixel value ;-;
+        args->rgbaBuffer[index++] = ConvertPixelValue(
+            pixel.color.green, 0.000093);
+        args->rgbaBuffer[index++] = ConvertPixelValue(
+            pixel.color.blue,  0.000093);
+        args->rgbaBuffer[index++] = OPAQUE_ALPHA_VALUE;
+        //printf("%f, %f, %f\n", pixel.color.red, pixel.color.green, pixel.color.blue);
+      }
+    }
+
+
+    return NULL;
+  }
+
+
+
+
+
+
+
   // Empties out the solidObjectList and destroys/frees 
   // the SolidObjects that were in it.
   void Scene::ClearSolidObjectList()
@@ -728,6 +807,8 @@ namespace Imager
     return true;  
   }
 
+
+
   // Generate an image of the scene and write it to the 
   // specified output PNG file.
   // outPngFileName is the name of the PNG file to write the image to.
@@ -758,12 +839,7 @@ namespace Imager
     const double newZoom  = zoom * smallerDim;
     //ImageBuffer buffer(pixelsWide, pixelsHigh, backgroundColor);
 
-    // The camera is located at the origin.
-    //Vector camera(0.0, 0.0, 0.0);
-
-
     const Color fullIntensity(1.0, 1.0, 1.0);
-
 
 
     // Downsample the image buffer to an integer array of RGBA 
@@ -779,8 +855,7 @@ namespace Imager
     //rgbaBuffer = std::vector<unsigned char>(RGBA_BUFFER_SIZE);
     unsigned char rgbaBuffer[RGBA_BUFFER_SIZE];
     unsigned rgbaIndex = 0;
-    const double patchSize = antiAliasFactor * antiAliasFactor;
-
+    //const double patchSize = antiAliasFactor * antiAliasFactor;
 
 
     // We keep a list of (i,j) screen coordinates for pixels
@@ -788,92 +863,27 @@ namespace Imager
     // Later we will come back and fix these pixels.
     PixelList ambiguousPixelList;
 
-    #pragma omp parallel for
-    for (size_t j=0; j < pixelsHigh; ++j)
-    {
-      // The camera faces in the -z direction.
-      // This allows the +x direction to be to the right,
-      // and the +y direction to be upward.
-      Vector direction(0.0, 0.0, -1.0);
-      Vector camera(0.0, 0.0, 0.0);
-      direction.y = (pixelsHigh/2.0 - j) / newZoom;
-      for (size_t i=0; i < pixelsWide; ++i)
-      {
-        direction.x = (i - pixelsWide/2.0) / newZoom;
+    //#pragma omp parallel for num_threads(16) schedule(dynamic)
+    pthread_t threads[2];
+    threadArgs *args = (threadArgs*)malloc(sizeof(threadArgs));
+    args->i = 0;
+    args->pixelsHigh = pixelsHigh;
+    args->pixelsWide = pixelsWide;
+    args->newZoom = newZoom;
+    args->rgbaBuffer = &rgbaBuffer[0];
+    args->scene = const_cast<Imager::Scene*>(this);
 
-#if RAYTRACE_DEBUG_POINTS
-        {
-          using namespace std;
-
-          // Assume no active debug point unless we find one below.
-          activeDebugPoint = NULL;    
-
-          DebugPointList::const_iterator iter = debugPointList.begin();
-          DebugPointList::const_iterator end  = debugPointList.end();
-          for(; iter != end; ++iter)
-          {
-            if ((iter->iPixel == i) && (iter->jPixel == j))
-            {
-              cout << endl;
-              cout << "Hit breakpoint at (";
-              cout << i << ", " << j <<")" << endl;
-              activeDebugPoint = &(*iter);
-              break;
-            }
-          }
-        }
-#endif
-
-        // Trace a ray from the camera toward the given direction
-        // to figure out what color to assign to this pixel.
-        PixelData pixel;
-        pixel.color = TraceRay(
-            camera,
-            direction,
-            1.0,//ambientRefraction,
-            Color(1.0, 1.0, 1.0),//fullIntensity,
-            0);
-
-        unsigned index = pixelsWide*j*BYTES_PER_PIXEL + i*BYTES_PER_PIXEL;
-        rgbaBuffer[index++] = ConvertPixelValue(
-            pixel.color.red, 0.000093); // Magic number was the max pixel value ;-;
-        rgbaBuffer[index++] = ConvertPixelValue(
-            pixel.color.green, 0.000093);
-        rgbaBuffer[index++] = ConvertPixelValue(
-            pixel.color.blue,  0.000093);
-        rgbaBuffer[index++] = OPAQUE_ALPHA_VALUE;
-        //printf("%f, %f, %f\n", pixel.color.red, pixel.color.green, pixel.color.blue);
-      }
-    }
+    pthread_create(&threads[0], NULL, &threadHelper, (void*)args);
+    pthread_join(threads[0], NULL);
 
 #if RAYTRACE_DEBUG_POINTS
     // Leave no chance of a dangling pointer into debug points.
     activeDebugPoint = NULL;
 #endif
 
-    /*
-    // Go back and "heal" ambiguous pixels as best we can.
-    PixelList::const_iterator iter = ambiguousPixelList.begin();
-    PixelList::const_iterator end  = ambiguousPixelList.end();
-    for (; iter != end; ++iter)
-    {
-      const PixelCoordinates& p = *iter;
-      ResolveAmbiguousPixel(buffer, p.i, p.j);
-    }
-    */
-    /*
-    // We want to scale the arbitrary range of
-    // color component values to the range 0..255
-    // allowed by PNG format.  We therefore find
-    // the maximum red, green, or blue value anywhere
-    // in the image.
-    const double max = buffer.MaxColorValue();
-    printf("max is: %lf\n", max);
-    */
-
     // Timing code (jocelynh)
     timestamp_t t1 = get_timestamp();
-    std::cout << "time elapsed: " << (float)((t1-t0)/1000000.0L) << "\n";
+    std::cout << "time elapsed for raytrace: " << (float)((t1-t0)/1000000.0L) << "\n";
 
     // Write the PNG file
     const unsigned error = lodepng::encode(
@@ -891,13 +901,18 @@ namespace Imager
     }
 
     /*** SDL ***/
+    timestamp_t copy_t0 = get_timestamp();
     SDL_Surface *rgbSurface = SDL_CreateRGBSurfaceFrom(
         &rgbaBuffer[0], pixelsWide, pixelsHigh, 32, // depth = 8 bits
         pixelsWide*4*sizeof(unsigned char),
         0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000); // Defaults for RGBA masks
     SDL_BlitSurface(rgbSurface, NULL, screenSurface, NULL);
+    // Timing
+    timestamp_t copy_t1 = get_timestamp();
+    //std::cout << "time elapsed for draw: " << (float)((copy_t1-copy_t0)/1000000.0L) << "\n";
+    // Update window shown
     SDL_UpdateWindowSurface(window);
-    SDL_Delay(10000);
+    SDL_Delay(500);
   }
 
   /*==============< END OF SAVEIMAGE >=================*/

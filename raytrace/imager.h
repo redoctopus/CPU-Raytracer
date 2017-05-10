@@ -1452,6 +1452,9 @@ namespace Imager
     class Scene
     {
     public:
+        void *ThreadRayTrace(void *arg);
+        //static void *threadHelper(void *arg);
+
         explicit Scene(const Color& _backgroundColor = Color())
             : backgroundColor(_backgroundColor)
             , ambientRefraction(REFRACTION_VACUUM)
@@ -1499,6 +1502,8 @@ namespace Imager
             size_t antiAliasFactor,
             SDL_Window *window,
             SDL_Surface *screenSurface) const;
+  
+
 
         // By default, regions of space that are not
         // explicitly occupied by some object have
@@ -1594,6 +1599,10 @@ namespace Imager
 
             return static_cast<unsigned char>(pixelValue);
         }
+
+
+        //void *ThreadRayTrace(void *arg);
+        //static void *threadHelper(void *arg);
 
         // The color to use for pixels where no solid 
         // object intersection was found.

@@ -575,6 +575,13 @@ void ChessBoardTest()
 
   const char* filename = "chessboard.png";
   scene.SaveImage(filename, 600, 360, 4.5, 1, window, screenSurface);
+  scene.SaveImage(filename, 600, 360, 4.5, 1, window, screenSurface);
+  scene.SaveImage(filename, 600, 360, 4.5, 1, window, screenSurface);
+  scene.SaveImage(filename, 600, 360, 4.5, 1, window, screenSurface);
+  scene.SaveImage(filename, 600, 360, 4.5, 1, window, screenSurface);
+  scene.SaveImage(filename, 600, 360, 4.5, 1, window, screenSurface);
+  scene.SaveImage(filename, 600, 360, 4.5, 1, window, screenSurface);
+  scene.SaveImage(filename, 600, 360, 4.5, 1, window, screenSurface);
 
   std::cout << "Wrote " << filename << std::endl;
 }
