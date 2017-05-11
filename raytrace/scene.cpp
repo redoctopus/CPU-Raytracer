@@ -38,7 +38,6 @@
 #include "pthread_barrier.h"
 #include <SDL/SDL.h>
 #include <sys/time.h>
-#include <immintrin.h>
 
 #define NUM_THREADS 4
 #define OFFSET_TIMES 5
@@ -850,7 +849,6 @@ namespace Imager
       SDL_Surface *screenSurface) const
   {
 
-    timestamp_t t0 = get_timestamp();
     // Oversample the image using the anti-aliasing factor.
     const size_t smallerDim = 
       ((pixelsWide < pixelsHigh) ? pixelsWide : pixelsHigh);
@@ -894,6 +892,7 @@ namespace Imager
       exit(1);
     }
 
+    timestamp_t t0 = get_timestamp();
     // Multithreading
     pthread_t threads[NUM_THREADS];
     for (int i=0; i<NUM_THREADS; i++) {
@@ -926,6 +925,7 @@ namespace Imager
       // Timing code (jocelynh)
       timestamp_t t1 = get_timestamp();
       std::cout << "time elapsed for raytrace: " << (float)((t1-t0)/1000000.0L) << "\n";
+      t0 = get_timestamp();
 
       /*
       // Write the PNG file

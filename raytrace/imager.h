@@ -31,6 +31,8 @@
 #include "algebra.h"
 #include <SDL2/SDL.h>
 
+#include <x86intrin.h>
+
 #define RAYTRACE_DEBUG_POINTS 0
 
 namespace Imager
@@ -192,6 +194,7 @@ namespace Imager
 
     struct Color
     {
+        double padding;
         double  red;
         double  green;
         double  blue;
@@ -200,6 +203,7 @@ namespace Imager
             : red  (_luminosity * _red)
             , green(_luminosity * _green)
             , blue (_luminosity * _blue)
+            , padding(0.0)
         {
         }
 
@@ -207,14 +211,29 @@ namespace Imager
             : red(0.0)
             , green(0.0)
             , blue(0.0)
+            , padding(0.0)
         {
         }
 
         Color& operator += (const Color& other)
         {
-            red   += other.red;
+            //__m256d *i =
+            //  reinterpret_cast<__m256d *>(static_cast<double *>(&(this->padding)));
+            __m256d *i =
+              reinterpret_cast<__m256d *>(&(this->padding));
+            const __m256d *j =
+              reinterpret_cast<const __m256d *>(&(other.padding));
+
+            __m256d a = _mm256_load_pd(&(this->padding));
+            __m256d b = _mm256_load_pd(&(other.padding));
+            a = _mm256_add_pd(a,b);
+
+            _mm256_store_pd(&(this->padding), a);
+
+
+            /*red   += other.red;
             green += other.green;
-            blue  += other.blue;
+            blue  += other.blue;*/
             return *this;
         }
 
