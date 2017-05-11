@@ -41,7 +41,8 @@
 #include <unistd.h>
 
 #define NUM_THREADS 4
-#define OFFSET_TIMES 10
+#define OFFSET_TIMES 20
+#define SUBSAMPLE_MAX 4
 pthread_barrier_t barrier[2];
 
 /* The following timestamp code from Stack Overflow */
@@ -103,19 +104,32 @@ namespace Imager
 
     for (size_t offset=0; offset<OFFSET_TIMES; offset++) {
       // Zoom the camera slightly closer
-      if (offset < 5)
+      if (offset < 10)
         camera.z += 0.5;
       else
         camera.z -= 0.5;
 
       for (size_t j=j_start; j<j_end; j+=NUM_THREADS)
       {
+        // If saved, use the subsampled
+        Color saved;
+        int use_saved = 0;
+
         // The camera faces in the -z direction.
         // This allows the +x direction to be to the right,
         // and the +y direction to be upward.
         direction.y = (pixelsHigh/2.0 - j) / newZoom;
         for (size_t i=0; i < pixelsWide; ++i)
         {
+          if (use_saved) {
+            unsigned index = pixelsWide*j*BYTES_PER_PIXEL + i*BYTES_PER_PIXEL;
+            rgbaBuffer[parity][index++] = saved.red;
+            rgbaBuffer[parity][index++] = saved.green;
+            rgbaBuffer[parity][index++] = saved.blue;
+            rgbaBuffer[parity][index++] = OPAQUE_ALPHA_VALUE;
+            use_saved--;
+            continue;
+          }
           direction.x = (i - pixelsWide/2.0) / newZoom;
 
           // Trace a ray from the camera toward the given direction
@@ -129,14 +143,45 @@ namespace Imager
               0);
 
           unsigned index = pixelsWide*j*BYTES_PER_PIXEL + i*BYTES_PER_PIXEL;
-          rgbaBuffer[parity][index++] = ConvertPixelValue(
-              pixel.color.red, 0.000093); // Magic number was the max pixel value ;-;
-          rgbaBuffer[parity][index++] = ConvertPixelValue(
-              pixel.color.green, 0.000093);
-          rgbaBuffer[parity][index++] = ConvertPixelValue(
-              pixel.color.blue,  0.000093);
+          pixel.color.red = ConvertPixelValue(pixel.color.red, 0.000093);
+          pixel.color.green = ConvertPixelValue(pixel.color.green, 0.000093);
+          pixel.color.blue = ConvertPixelValue(pixel.color.blue, 0.000093);
+          rgbaBuffer[parity][index++] = pixel.color.red;
+          rgbaBuffer[parity][index++] = pixel.color.green;
+          rgbaBuffer[parity][index++] = pixel.color.blue;
           rgbaBuffer[parity][index++] = OPAQUE_ALPHA_VALUE;
           //printf("%f, %f, %f\n", pixel.color.red, pixel.color.green, pixel.color.blue);
+
+          /**********************/
+          direction.x = (i+SUBSAMPLE_MAX-1 - pixelsWide/2.0) / newZoom;
+
+          // Trace a ray from the camera toward the given direction
+          // to figure out what color to assign to this pixel.
+          PixelData pixel2;
+          pixel2.color = TraceRay(
+              camera,
+              direction,
+              1.0,//ambientRefraction,
+              Color(1.0, 1.0, 1.0),//fullIntensity,
+              0);
+
+          unsigned index2 = pixelsWide*j*BYTES_PER_PIXEL + (i+SUBSAMPLE_MAX-1)*BYTES_PER_PIXEL;
+          pixel2.color.red = ConvertPixelValue(pixel2.color.red, 0.000093);
+          pixel2.color.green = ConvertPixelValue(pixel2.color.green, 0.000093);
+          pixel2.color.blue = ConvertPixelValue(pixel2.color.blue, 0.000093);
+          rgbaBuffer[parity][index2++] = pixel2.color.red;
+          rgbaBuffer[parity][index2++] = pixel2.color.green;
+          rgbaBuffer[parity][index2++] = pixel2.color.blue;
+          rgbaBuffer[parity][index2++] = OPAQUE_ALPHA_VALUE;
+
+          double rdiff = abs(pixel.color.red-pixel2.color.red);
+          double gdiff = abs(pixel.color.green-pixel2.color.green);
+          double bdiff = abs(pixel.color.blue-pixel2.color.blue);
+
+          if (rdiff+gdiff+bdiff <= 10.0) {
+            saved = pixel.color;
+            use_saved = SUBSAMPLE_MAX;
+          }
         }
       }
       //printf("Thread %lu at barrier for number %d\n", idx, offset);
