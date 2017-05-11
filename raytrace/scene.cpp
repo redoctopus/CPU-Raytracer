@@ -42,7 +42,6 @@
 
 #define NUM_THREADS 4
 #define OFFSET_TIMES 5
-//std::vector<unsigned char> rgbaBuffer;
 pthread_barrier_t barrier[2];
 
 /* The following timestamp code from Stack Overflow */
@@ -104,7 +103,7 @@ namespace Imager
 
     for (size_t offset=0; offset<OFFSET_TIMES; offset++) {
       // Zoom the camera slightly closer
-      camera.z += 2;
+      camera.z += 1;
 
       for (size_t j=j_start; j<j_end; j+=NUM_THREADS)
       {
@@ -137,9 +136,9 @@ namespace Imager
           //printf("%f, %f, %f\n", pixel.color.red, pixel.color.green, pixel.color.blue);
         }
       }
-      printf("Thread %lu at barrier for number %d\n", idx, offset);
+      //printf("Thread %lu at barrier for number %d\n", idx, offset);
       pthread_barrier_wait(&barrier[parity]);
-      printf("Thread %lu continuing...\n", idx);
+      //printf("Thread %lu continuing...\n", idx);
       parity = !parity;
     }
 
@@ -915,9 +914,9 @@ namespace Imager
     /*** Loop a few times ***/
     for (int offset=0; offset<OFFSET_TIMES; offset++) {
       // Wait for all threads to finish
-      printf("Main at barrier for number %d\n", offset);
+      //printf("Main at barrier for number %d\n", offset);
       pthread_barrier_wait(&barrier[parity]);
-      printf("Main continuing...\n");
+      //printf("Main continuing...\n");
 
 #if RAYTRACE_DEBUG_POINTS
       // Leave no chance of a dangling pointer into debug points.
