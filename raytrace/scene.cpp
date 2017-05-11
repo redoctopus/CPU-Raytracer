@@ -38,9 +38,10 @@
 #include "pthread_barrier.h"
 #include <SDL/SDL.h>
 #include <sys/time.h>
+#include <unistd.h>
 
 #define NUM_THREADS 4
-#define OFFSET_TIMES 5
+#define OFFSET_TIMES 10
 pthread_barrier_t barrier[2];
 
 /* The following timestamp code from Stack Overflow */
@@ -102,7 +103,10 @@ namespace Imager
 
     for (size_t offset=0; offset<OFFSET_TIMES; offset++) {
       // Zoom the camera slightly closer
-      camera.z += 1;
+      if (offset < 5)
+        camera.z += 0.5;
+      else
+        camera.z -= 0.5;
 
       for (size_t j=j_start; j<j_end; j+=NUM_THREADS)
       {
@@ -144,10 +148,6 @@ namespace Imager
 
     return NULL;
   }
-
-
-
-
 
 
 
@@ -354,8 +354,11 @@ namespace Imager
         // diminished based on transparency (the part
         // of the ray left available to refraction in 
         // the first place).
-        Color reflectionColor (1.0, 1.0, 1.0);
-        reflectionColor *= transparency * refractiveReflectionFactor;
+
+        /*Color reflectionColor (1.0, 1.0, 1.0);
+        reflectionColor *= transparency * refractiveReflectionFactor;*/
+        double reflectVal = transparency * refractiveReflectionFactor;
+        Color reflectionColor(reflectVal, reflectVal, reflectVal);
 
         // Add in the glossy part of the reflection, which
         // can be different for red, green, and blue.
@@ -908,7 +911,6 @@ namespace Imager
       pthread_create(&threads[i], NULL, &threadHelper, (void*)args);
     }
 
-
     
     /*** Loop a few times ***/
     for (int offset=0; offset<OFFSET_TIMES; offset++) {
@@ -956,7 +958,7 @@ namespace Imager
       //std::cout << "time elapsed for draw: " << (float)((copy_t1-copy_t0)/1000000.0L) << "\n";
       // Update window shown
       SDL_UpdateWindowSurface(window);
-      SDL_Delay(500);
+      SDL_Delay(100);
 
       pthread_barrier_destroy(&barrier[parity]);
       if(pthread_barrier_init(&barrier[parity], NULL, NUM_THREADS+1)) {
